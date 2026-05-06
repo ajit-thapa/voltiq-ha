@@ -16,14 +16,13 @@ from .const import DOMAIN, MANUFACTURER, DATA_PRICES, DATA_SYSTEM
 from .coordinator import VoltiqCoordinator
 
 _SENSORS: list[tuple] = [
-    # (key, name, device_class, data_key, value_path)
     ("backend_online", "Backend Online", BinarySensorDeviceClass.CONNECTIVITY, DATA_SYSTEM, "backend_online"),
-    ("price_spike",    "Price Spike",    BinarySensorDeviceClass.PROBLEM,      DATA_PRICES, "spike"),
+    ("price_spike", "Price Spike", BinarySensorDeviceClass.PROBLEM, DATA_PRICES, "spike"),
 ]
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VoltiqCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(

@@ -1,4 +1,4 @@
-"""Select entity — Battery mode control."""
+"""Select entity -- Battery mode control."""
 
 from __future__ import annotations
 
@@ -14,15 +14,13 @@ from .coordinator import VoltiqCoordinator
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VoltiqCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([VoltiqBatteryModeSelect(coordinator, entry.entry_id)])
 
 
 class VoltiqBatteryModeSelect(CoordinatorEntity[VoltiqCoordinator], SelectEntity):
-    """Select entity to control battery dispatch mode."""
-
     _attr_has_entity_name = True
     _attr_name = "Battery Mode"
     _attr_icon = "mdi:battery-sync"
@@ -45,9 +43,8 @@ class VoltiqBatteryModeSelect(CoordinatorEntity[VoltiqCoordinator], SelectEntity
         return BATTERY_MODES.get(mode, "Self Consumption")
 
     async def async_select_option(self, option: str) -> None:
-        # Reverse lookup: label → key
         mode_key = next(
-            (k for k, v in BATTERY_MODES.items() if v == option), "self_consumption"
+            (k for k, v in BATTERY_MODES.items() if v == option), "self_consumption",
         )
         await self.coordinator.set_battery_mode(mode_key)
         await self.coordinator.async_request_refresh()

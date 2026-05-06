@@ -1,4 +1,4 @@
-"""Button entities — manual refresh and force modes."""
+"""Button entities -- manual refresh and force modes."""
 
 from __future__ import annotations
 
@@ -7,13 +7,14 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER
 from .coordinator import VoltiqCoordinator
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VoltiqCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([
@@ -24,11 +25,11 @@ async def async_setup_entry(
     ])
 
 
-class _VoltiqButton(ButtonEntity):
+class _VoltiqButton(CoordinatorEntity[VoltiqCoordinator], ButtonEntity):
     _attr_has_entity_name = True
 
     def __init__(self, coordinator: VoltiqCoordinator, entry_id: str) -> None:
-        self._coordinator = coordinator
+        super().__init__(coordinator)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry_id)},
             name="Voltiq Energy Manager",
@@ -45,7 +46,7 @@ class VoltiqRefreshButton(_VoltiqButton):
         self._attr_unique_id = f"{entry_id}_force_refresh"
 
     async def async_press(self) -> None:
-        await self._coordinator.async_request_refresh()
+        await self.coordinator.async_request_refresh()
 
 
 class VoltiqForceDischButton(_VoltiqButton):
@@ -57,8 +58,8 @@ class VoltiqForceDischButton(_VoltiqButton):
         self._attr_unique_id = f"{entry_id}_force_discharge"
 
     async def async_press(self) -> None:
-        await self._coordinator.set_battery_mode("forced_discharge")
-        await self._coordinator.async_request_refresh()
+        await self.coordinator.set_battery_mode("forced_discharge")
+        await self.coordinator.async_request_refresh()
 
 
 class VoltiqForceChargeButton(_VoltiqButton):
@@ -70,8 +71,8 @@ class VoltiqForceChargeButton(_VoltiqButton):
         self._attr_unique_id = f"{entry_id}_force_charge"
 
     async def async_press(self) -> None:
-        await self._coordinator.set_battery_mode("forced_charge")
-        await self._coordinator.async_request_refresh()
+        await self.coordinator.set_battery_mode("forced_charge")
+        await self.coordinator.async_request_refresh()
 
 
 class VoltiqSelfConsumeButton(_VoltiqButton):
@@ -83,5 +84,5 @@ class VoltiqSelfConsumeButton(_VoltiqButton):
         self._attr_unique_id = f"{entry_id}_self_consume"
 
     async def async_press(self) -> None:
-        await self._coordinator.set_battery_mode("self_consumption")
-        await self._coordinator.async_request_refresh()
+        await self.coordinator.set_battery_mode("self_consumption")
+        await self.coordinator.async_request_refresh()

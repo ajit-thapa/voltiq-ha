@@ -14,14 +14,13 @@ from .const import DOMAIN, MANUFACTURER, DATA_SETTINGS
 from .coordinator import VoltiqCoordinator
 
 _NUMBERS: list[tuple] = [
-    # (key, name, icon, min, max, step, settings_key)
-    ("min_soc", "Min Battery SoC", "mdi:battery-low",   5,  50, 1, "min_soc"),
+    ("min_soc", "Min Battery SoC", "mdi:battery-low", 5, 50, 1, "min_soc"),
     ("max_soc", "Max Battery SoC", "mdi:battery-high", 50, 100, 1, "max_soc"),
 ]
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VoltiqCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(

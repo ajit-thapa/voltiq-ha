@@ -33,15 +33,15 @@ from .coordinator import VoltiqCoordinator
 
 @dataclass(frozen=True)
 class VoltiqSensorDescription(SensorEntityDescription):
-    data_key: str = ""        # top-level coordinator data key
-    value_path: str = ""      # dot-separated path into that dict
+    data_key: str = ""
+    value_path: str = ""
 
 
 PRICE_SENSORS: tuple[VoltiqSensorDescription, ...] = (
     VoltiqSensorDescription(
         key="import_price",
         name="Import Price",
-        native_unit_of_measurement="¢/kWh",
+        native_unit_of_measurement="c/kWh",
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:lightning-bolt",
         data_key=DATA_PRICES, value_path="import_price",
@@ -49,7 +49,7 @@ PRICE_SENSORS: tuple[VoltiqSensorDescription, ...] = (
     VoltiqSensorDescription(
         key="feedin_price",
         name="Feed-in Price",
-        native_unit_of_measurement="¢/kWh",
+        native_unit_of_measurement="c/kWh",
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:transmission-tower-export",
         data_key=DATA_PRICES, value_path="feedin_price",
@@ -191,7 +191,7 @@ EARNINGS_SENSORS: tuple[VoltiqSensorDescription, ...] = (
         key="earned_today",
         name="Earned Today",
         native_unit_of_measurement="AUD",
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.TOTAL,
         icon="mdi:currency-usd",
         data_key=DATA_EARNINGS, value_path="earned_today",
     ),
@@ -199,7 +199,7 @@ EARNINGS_SENSORS: tuple[VoltiqSensorDescription, ...] = (
         key="cost_today",
         name="Cost Today",
         native_unit_of_measurement="AUD",
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.TOTAL,
         icon="mdi:cash-minus",
         data_key=DATA_EARNINGS, value_path="cost_today",
     ),
@@ -216,7 +216,7 @@ EARNINGS_SENSORS: tuple[VoltiqSensorDescription, ...] = (
         name="Solar Generated Today",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.TOTAL,
         icon="mdi:solar-panel-large",
         data_key=DATA_EARNINGS, value_path="solar_kwh_today",
     ),
@@ -225,7 +225,7 @@ EARNINGS_SENSORS: tuple[VoltiqSensorDescription, ...] = (
         name="Exported Today",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.TOTAL,
         icon="mdi:transmission-tower-export",
         data_key=DATA_EARNINGS, value_path="exported_kwh",
     ),
@@ -234,7 +234,7 @@ EARNINGS_SENSORS: tuple[VoltiqSensorDescription, ...] = (
         name="Imported Today",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.TOTAL,
         icon="mdi:transmission-tower-import",
         data_key=DATA_EARNINGS, value_path="imported_kwh",
     ),
@@ -275,7 +275,6 @@ ALERTS_SENSORS: tuple[VoltiqSensorDescription, ...] = (
 
 
 def _resolve(data: dict, path: str) -> Any:
-    """Resolve dot-separated path in dict."""
     val = data
     for key in path.split("."):
         if not isinstance(val, dict):
@@ -285,19 +284,19 @@ def _resolve(data: dict, path: str) -> Any:
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VoltiqCoordinator = hass.data[DOMAIN][entry.entry_id]
     entities = []
-    for desc in (*PRICE_SENSORS, *SYSTEM_SENSORS, *FORECAST_SENSORS,
-                 *EARNINGS_SENSORS, *ADVISOR_SENSORS, *ALERTS_SENSORS):
+    for desc in (
+        *PRICE_SENSORS, *SYSTEM_SENSORS, *FORECAST_SENSORS,
+        *EARNINGS_SENSORS, *ADVISOR_SENSORS, *ALERTS_SENSORS,
+    ):
         entities.append(VoltiqSensor(coordinator, desc, entry.entry_id))
     async_add_entities(entities)
 
 
 class VoltiqSensor(CoordinatorEntity[VoltiqCoordinator], SensorEntity):
-    """A single Voltiq sensor entity."""
-
     entity_description: VoltiqSensorDescription
     _attr_has_entity_name = True
 
@@ -326,8 +325,8 @@ class VoltiqSensor(CoordinatorEntity[VoltiqCoordinator], SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         data = self.coordinator.data or {}
-        prices = data.get(DATA_PRICES, {}) or {}
         if self.entity_description.key == "import_price":
+            prices = data.get(DATA_PRICES, {}) or {}
             return {
                 "spike": prices.get("spike", False),
                 "forecast": prices.get("forecast_prices", [])[:6],
@@ -337,7 +336,10 @@ class VoltiqSensor(CoordinatorEntity[VoltiqCoordinator], SensorEntity):
             return {"hourly": forecast.get("hours", [])[:12]}
         if self.entity_description.key == "alerts_count":
             alerts = data.get(DATA_ALERTS, {}) or {}
-            return {"items": alerts.get("items", []), "latest_level": alerts.get("latest_level", "")}
+            return {
+                "items": alerts.get("items", []),
+                "latest_level": alerts.get("latest_level", ""),
+            }
         if self.entity_description.key == "advisor_tip":
             advisor = data.get(DATA_ADVISOR, {}) or {}
             return {"all_tips": advisor.get("tips", [])}
