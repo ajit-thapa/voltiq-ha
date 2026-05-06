@@ -1,0 +1,60 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Voltiq Energy Manager",
+        "description": "Choose your electricity retailer and optionally connect to your Voltiq backend for device control.",
+        "data": {
+          "retailer":    "Electricity retailer",
+          "aemo_region": "State / region",
+          "backend_url": "Voltiq backend URL (optional, for device control)"
+        }
+      },
+      "amber": {
+        "title": "Amber Electric",
+        "data": { "amber_api_key": "Amber API key (app.amber.com.au → Developers)" }
+      },
+      "localvolts": {
+        "title": "Localvolts",
+        "data": {
+          "localvolts_key":        "API key",
+          "localvolts_nmi":        "NMI",
+          "localvolts_partner_id": "Partner ID"
+        }
+      },
+      "supabase": {
+        "title": "Voltiq Cloud (optional)",
+        "description": "Connect to your Voltiq Supabase database to enable earnings tracking, alerts, and settings sync. Skip if you only need energy prices and solar forecast.",
+        "data": {
+          "supabase_url":      "Supabase project URL (e.g. https://xxx.supabase.co)",
+          "supabase_anon_key": "Supabase anon / public key"
+        }
+      },
+      "location": {
+        "title": "Solar Forecast",
+        "description": "Used for solar generation forecasting via Open-Meteo (free, no API key needed).",
+        "data": {
+          "latitude":          "Latitude",
+          "longitude":         "Longitude",
+          "solar_capacity_kw": "Solar system capacity (kW)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot reach backend — check the URL and try again."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Voltiq Options",
+        "data": {
+          "backend_url":        "Voltiq backend URL",
+          "supabase_url":       "Supabase project URL",
+          "supabase_anon_key":  "Supabase anon / public key",
+          "solar_capacity_kw":  "Solar system capacity (kW)"
+        }
+      }
+    }
+  }
+}
