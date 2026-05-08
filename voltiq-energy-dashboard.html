@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voltiq Energy Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,100..900&family=Poppins:wght@100..900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://code.iconify.design/iconify-icon/3.0.0/iconify-icon.min.js"></script>
+  <style type="text/tailwindcss">
+    @import "tailwindcss";
+    @theme inline {
+      --color-background: #05070a;
+      --color-foreground: #f8fafc;
+      --color-primary: #fbbf24;
+      --color-primary-foreground: #05070a;
+      --color-secondary: #22c55e;
+      --color-tertiary: #3b82f6;
+      --color-muted: #1e293b;
+      --color-muted-foreground: #94a3b8;
+      --color-accent: #a855f7;
+      --color-destructive: #ef4444;
+      --color-card: #0f172a;
+      --color-border: #1e293b;
+      --color-input: #1e293b;
+      --color-ring: #fbbf24;
+      --radius: 0.75rem;
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--color-background);
+      color: var(--color-foreground);
+    }
+  </style>
+</head>
+<body>
+<div class="min-h-screen flex flex-col lg:flex-row bg-background text-foreground overflow-hidden">
+  <!-- Sidebar -->
+  <aside class="w-20 lg:w-24 bg-card border-r border-border flex flex-col items-center py-6 gap-8">
+    <div class="p-3 bg-secondary/20 rounded-xl text-secondary">
+      <iconify-icon icon="lucide:zap" class="text-2xl"></iconify-icon>
+    </div>
+    <nav class="flex flex-col gap-6 flex-1">
+      <button class="p-3 rounded-xl bg-primary/10 text-primary" title="Dashboard"><iconify-icon icon="lucide:layout-dashboard" class="text-2xl"></iconify-icon></button>
+      <button class="p-3 rounded-xl text-muted-foreground hover:bg-muted/50 transition-colors" title="Battery"><iconify-icon icon="lucide:battery" class="text-2xl"></iconify-icon></button>
+      <button class="p-3 rounded-xl text-muted-foreground hover:bg-muted/50 transition-colors" title="Solar"><iconify-icon icon="lucide:sun" class="text-2xl"></iconify-icon></button>
+      <button class="p-3 rounded-xl text-muted-foreground hover:bg-muted/50 transition-colors" title="Grid"><iconify-icon icon="lucide:grid-3x3" class="text-2xl"></iconify-icon></button>
+      <button class="p-3 rounded-xl text-muted-foreground hover:bg-muted/50 transition-colors" title="Settings"><iconify-icon icon="lucide:settings" class="text-2xl"></iconify-icon></button>
+    </nav>
+    <div class="mt-auto flex flex-col items-center gap-2">
+      <div id="renewablesRing" class="relative w-16 h-16">
+        <svg class="w-full h-full" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="42" stroke="#1e293b" stroke-width="8" fill="none" />
+          <circle id="renewablesArc" cx="50" cy="50" r="42" stroke="#22c55e" stroke-width="8" fill="none" stroke-dasharray="0 264" stroke-linecap="round" transform="rotate(-90 50 50)" />
+        </svg>
+        <div class="absolute inset-0 flex items-center justify-center text-xs font-bold text-secondary" id="renewablesPct">--</div>
+      </div>
+      <span class="text-[10px] text-muted-foreground text-center">Grid<br/>Renewables</span>
+      <div id="systemStatus" class="w-2 h-2 rounded-full bg-yellow-500 mt-2" title="System status"></div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="flex-1 flex flex-col overflow-y-auto max-h-screen p-6 gap-6">
+    <!-- Header -->
+    <header class="flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-heading font-bold flex items-center gap-2">
+          <iconify-icon icon="lucide:zap" class="text-primary"></iconify-icon>
+          Voltiq Energy Command
+        </h1>
+        <p class="text-muted-foreground text-sm">Real-time energy monitoring & control</p>
+      </div>
+      <div class="flex items-center gap-6 text-sm text-muted-foreground">
+        <div id="connectionStatus" class="px-3 py-1 rounded bg-yellow-500/20 text-yellow-400 text-xs font-semibold">
+          Initializing...
+        </div>
+        <div class="text-right">
+          <div class="font-bold text-foreground" id="currentTime">--:--</div>
+          <div class="text-xs" id="currentDate">--</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Ring Gauges Row -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <!-- Solar gauge -->
+      <div class="bg-card border border-border rounded-xl p-4 flex flex-col items-center gap-3">
+        <div class="flex items-center gap-2 self-start">
+          <iconify-icon icon="lucide:sun" class="text-primary"></iconify-icon>
+          <span class="text-xs font-semibold uppercase tracking-wider">Solar</span>
+        </div>
+        <div id="solarGauge" class="w-28 h-28 flex items-center justify-center text-muted-foreground">--</div>
+        <div class="text-[10px] text-primary mt-1" id="solarLabel">-- kW</div>
+      </div>
+
+      <!-- Battery gauge -->
+      <div class="bg-card border border-border rounded-xl p-4 flex flex-col items-center gap-3">
+        <div class="flex items-center gap-2 self-start">
+          <iconify-icon icon="lucide:battery" class="text-secondary"></iconify-icon>
+          <span class="text-xs font-semibold uppercase tracking-wider">Battery</span>
+        </div>
+        <div id="batteryGauge" class="w-28 h-28 flex items-center justify-center text-muted-foreground">--</div>
+        <div class="text-[10px] text-secondary" id="batteryLabel">-- %</div>
+        <div class="text-[10px] text-muted-foreground" id="batteryPowerLabel">-- kW</div>
+      </div>
+
+      <!-- House Load gauge -->
+      <div class="bg-card border border-border rounded-xl p-4 flex flex-col items-center gap-3">
+        <div class="flex items-center gap-2 self-start">
+          <iconify-icon icon="lucide:house" class="text-tertiary"></iconify-icon>
+          <span class="text-xs font-semibold uppercase tracking-wider">House Load</span>
+        </div>
+        <div id="houseGauge" class="w-28 h-28 flex items-center justify-center text-muted-foreground">--</div>
+        <div class="text-[10px] text-tertiary" id="houseLabel">-- kW</div>
+      </div>
+
+      <!-- Grid gauge -->
+      <div class="bg-card border border-border rounded-xl p-4 flex flex-col items-center gap-3">
+        <div class="flex items-center gap-2 self-start">
+          <iconify-icon icon="lucide:zap" class="text-accent"></iconify-icon>
+          <span class="text-xs font-semibold uppercase tracking-wider">Grid</span>
+        </div>
+        <div id="gridGauge" class="w-28 h-28 flex items-center justify-center text-muted-foreground">--</div>
+        <div class="text-[10px] text-accent" id="gridLabel">-- kW</div>
+      </div>
+    </div>
+
+    <!-- Price & Battery Control -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <!-- Price Cards -->
+      <div class="lg:col-span-5 bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider">💰 Energy Prices</h3>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <p class="text-muted-foreground text-xs">Import Price</p>
+            <p class="text-lg font-bold text-red-400" id="importPrice">-- c/kWh</p>
+          </div>
+          <div>
+            <p class="text-muted-foreground text-xs">Export Price</p>
+            <p class="text-lg font-bold text-green-400" id="exportPrice">-- c/kWh</p>
+          </div>
+        </div>
+        <div>
+          <p class="text-muted-foreground text-xs mb-1">Price Level</p>
+          <p class="text-sm font-semibold" id="priceLevel">--</p>
+        </div>
+      </div>
+
+      <!-- Solar Forecast -->
+      <div class="lg:col-span-4 bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider">☀️ Solar Forecast</h3>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <p class="text-muted-foreground text-xs">Today</p>
+            <p class="text-lg font-bold text-primary" id="forecastToday">-- kWh</p>
+          </div>
+          <div>
+            <p class="text-muted-foreground text-xs">Tomorrow</p>
+            <p class="text-lg font-bold text-primary" id="forecastTomorrow">-- kWh</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Battery Control -->
+      <div class="lg:col-span-3 bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider">⚡ Battery</h3>
+        <div>
+          <p class="text-muted-foreground text-xs mb-1">Mode</p>
+          <p class="text-sm font-semibold" id="batteryMode">--</p>
+        </div>
+        <div>
+          <p class="text-muted-foreground text-xs mb-1">Health</p>
+          <p class="text-sm font-semibold" id="batteryHealth">-- %</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Earnings & History -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <!-- Earnings Summary -->
+      <div class="lg:col-span-4 bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider">Today's Summary</h3>
+        <div class="space-y-3">
+          <div>
+            <p class="text-muted-foreground text-xs">Solar Generated</p>
+            <p class="text-lg font-bold text-primary" id="solarGenerated">-- kWh</p>
+          </div>
+          <div>
+            <p class="text-muted-foreground text-xs">Imported</p>
+            <p class="text-lg font-bold text-red-400" id="importedToday">-- kWh</p>
+          </div>
+          <div>
+            <p class="text-muted-foreground text-xs">Exported</p>
+            <p class="text-lg font-bold text-green-400" id="exportedToday">-- kWh</p>
+          </div>
+          <div class="pt-3 border-t border-border">
+            <p class="text-muted-foreground text-xs">Net Earnings</p>
+            <p class="text-lg font-bold text-primary" id="netEarnings">-- AUD</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Power History Chart -->
+      <div class="lg:col-span-8 bg-card border border-border rounded-xl p-6">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-xs font-semibold uppercase tracking-wider">Power Flow (24h)</h3>
+          <div class="flex gap-4 text-[10px] text-muted-foreground uppercase">
+            <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-primary"></span> Solar</div>
+            <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-tertiary"></span> House</div>
+            <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-accent"></span> Grid</div>
+            <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-secondary"></span> Battery</div>
+          </div>
+        </div>
+        <div class="h-64">
+          <canvas id="historyChart" height="160"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-auto flex justify-between items-center text-[10px] text-muted-foreground pt-4 border-t border-border">
+      <div class="flex gap-6">
+        <span class="flex items-center gap-2"><span id="systemStatusIndicator" class="w-2 h-2 rounded-full bg-yellow-500"></span> System: <span id="systemStatusText">Initializing</span></span>
+        <span class="flex items-center gap-2"><span id="inverterStatusIndicator" class="w-2 h-2 rounded-full bg-yellow-500"></span> Inverter: <span id="inverterStatusText">--</span></span>
+        <span class="flex items-center gap-2"><span id="batteryStatusIndicator" class="w-2 h-2 rounded-full bg-yellow-500"></span> Battery: <span id="batteryStatusText">--</span></span>
+      </div>
+      <span>Last update: <span id="lastUpdate">--</span></span>
+    </footer>
+  </main>
+</div>
+
+<!-- Configuration Modal -->
+<div id="configModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+  <div class="bg-card border border-border rounded-xl p-6 max-w-2xl w-full max-h-96 overflow-y-auto">
+    <h2 class="text-lg font-bold mb-4">Configure Voltiq Dashboard</h2>
+    <div class="space-y-4">
+      <div>
+        <label class="text-xs text-muted-foreground block mb-1">Home Assistant URL</label>
+        <input type="text" id="haUrl" class="w-full bg-background border border-border rounded-lg p-2 text-sm text-foreground" placeholder="http://homeassistant.local:8123" />
+      </div>
+      <div>
+        <label class="text-xs text-muted-foreground block mb-1">Long-Lived Access Token</label>
+        <input type="password" id="haToken" class="w-full bg-background border border-border rounded-lg p-2 text-sm text-foreground" placeholder="eyJ0..." />
+      </div>
+      <div class="bg-blue-500/10 border border-blue-500/20 rounded p-3 text-xs text-blue-200">
+        ℹ️ Voltiq sensors will auto-discover. If you have custom entity mappings, add them below.
+      </div>
+      <details class="text-xs">
+        <summary class="cursor-pointer text-muted-foreground hover:text-foreground">Advanced: Custom Entity Mapping</summary>
+        <div class="space-y-3 mt-3 pl-3 border-l border-border">
+          <div>
+            <label class="text-muted-foreground block mb-1">Solar Power Entity</label>
+            <input type="text" id="customSolar" class="w-full bg-background border border-border rounded p-2 text-sm" placeholder="sensor.voltiq_energy_manager_solar_power" />
+          </div>
+          <div>
+            <label class="text-muted-foreground block mb-1">Battery SoC Entity</label>
+            <input type="text" id="customBatterySoC" class="w-full bg-background border border-border rounded p-2 text-sm" placeholder="sensor.voltiq_energy_manager_battery_soc" />
+          </div>
+          <div>
+            <label class="text-muted-foreground block mb-1">Grid Power Entity</label>
+            <input type="text" id="customGrid" class="w-full bg-background border border-border rounded p-2 text-sm" placeholder="sensor.voltiq_energy_manager_grid_power" />
+          </div>
+          <div>
+            <label class="text-muted-foreground block mb-1">Load Power Entity</label>
+            <input type="text" id="customLoad" class="w-full bg-background border border-border rounded p-2 text-sm" placeholder="sensor.voltiq_energy_manager_load_power" />
+          </div>
+        </div>
+      </details>
+      <div class="flex gap-3">
+        <button onclick="saveConfiguration()" class="flex-1 bg-primary text-primary-foreground font-semibold py-2 rounded-lg">Save & Connect</button>
+        <button onclick="document.getElementById('configModal').classList.add('hidden')" class="px-4 py-2 border border-border rounded-lg">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Configuration
+  const CONFIG = {
+    HA_URL: localStorage.getItem('voltiq_ha_url') || '',
+    HA_TOKEN: localStorage.getItem('voltiq_ha_token') || '',
+    // Voltiq auto-discovered sensors (use these first)
+    VOLTIQ_SENSORS: {
+      solarPower: 'sensor.voltiq_energy_manager_solar_power',
+      batterySoC: 'sensor.voltiq_energy_manager_battery_soc',
+      batteryPower: 'sensor.voltiq_energy_manager_battery_power',
+      gridPower: 'sensor.voltiq_energy_manager_grid_power',
+      loadPower: 'sensor.voltiq_energy_manager_load_power',
+      importPrice: 'sensor.voltiq_energy_manager_import_price',
+      exportPrice: 'sensor.voltiq_energy_manager_feedin_price',
+      priceLevel: 'sensor.voltiq_energy_manager_price_descriptor',
+      renewables: 'sensor.voltiq_energy_manager_renewables',
+      batteryMode: 'sensor.voltiq_energy_manager_battery_mode',
+      batteryHealth: 'sensor.voltiq_energy_manager_battery_health',
+      inverterStatus: 'sensor.voltiq_energy_manager_inverter_status',
+      batteryStatus: 'sensor.voltiq_energy_manager_battery_status',
+      forecastToday: 'sensor.voltiq_energy_manager_solar_today_kwh',
+      forecastTomorrow: 'sensor.voltiq_energy_manager_solar_tomorrow_kwh',
+      earnedToday: 'sensor.voltiq_energy_manager_earned_today',
+      costToday: 'sensor.voltiq_energy_manager_cost_today',
+      netToday: 'sensor.voltiq_energy_manager_net_today',
+      solarGenerated: 'sensor.voltiq_energy_manager_solar_generated_today',
+      exportedKwh: 'sensor.voltiq_energy_manager_exported_today',
+      importedKwh: 'sensor.voltiq_energy_manager_imported_today',
+    },
+    // Allow override with custom entities
+    CUSTOM_ENTITIES: {
+      solarPower: localStorage.getItem('custom_solar_power') || '',
+      batterySoC: localStorage.getItem('custom_battery_soc') || '',
+      gridPower: localStorage.getItem('custom_grid_power') || '',
+      loadPower: localStorage.getItem('custom_load_power') || '',
+    }
+  };
+
+  // State
+  let state = {
+    connected: false,
+    lastUpdate: new Date(),
+    entities: {}
+  };
+
+  let chart = null;
+
+  // Ring gauge renderer
+  function createRingGauge(containerId, value, max, unit, colorFunc) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (value === null || value === undefined) {
+      container.innerHTML = '';
+      return;
+    }
+
+    const pct = Math.min(1, value / max);
+    const circumference = 2 * Math.PI * 42;
+    const dash = pct * circumference;
+    const color = colorFunc(value);
+
+    container.innerHTML = `
+      <svg class="w-full h-full" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="42" stroke="#1e293b" stroke-width="8" fill="none" />
+        <circle cx="50" cy="50" r="42" stroke="${color}" stroke-width="8" fill="none"
+          stroke-dasharray="${dash.toFixed(1)} ${circumference}" stroke-linecap="round"
+          transform="rotate(-90 50 50)" />
+        <text x="50" y="46" text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="700" fill="${color}">
+          ${value.toFixed(unit === '%' ? 0 : 1)}
+        </text>
+        <text x="50" y="62" text-anchor="middle" font-size="8" fill="#94a3b8">${unit}</text>
+      </svg>`;
+  }
+
+  // Color functions
+  const colors = {
+    solar: () => '#fbbf24',
+    battery: (soc) => soc < 20 ? '#ef4444' : soc < 50 ? '#f59e0b' : '#22c55e',
+    house: (val) => val < 2 ? '#3b82f6' : val < 4 ? '#3b82f6' : '#ef4444',
+    grid: (val) => val > 0 ? '#ef4444' : '#22c55e',
+    renewables: (pct) => pct < 30 ? '#ef4444' : pct < 70 ? '#f59e0b' : '#22c55e'
+  };
+
+  // Fetch from HA
+  async function fetchEntity(entityId) {
+    if (!CONFIG.HA_TOKEN) return null;
+    try {
+      const response = await fetch(`${CONFIG.HA_URL}/api/states/${entityId}`, {
+        headers: { 'Authorization': `Bearer ${CONFIG.HA_TOKEN}` }
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      const val = parseFloat(data.state);
+      return isNaN(val) ? null : val;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function fetchAllEntities() {
+    const entities = {};
+    for (const [key, entityId] of Object.entries(CONFIG.VOLTIQ_SENSORS)) {
+      const value = await fetchEntity(entityId);
+      if (value !== null) entities[key] = value;
+    }
+    state.entities = entities;
+    state.lastUpdate = new Date();
+    updateDashboard();
+  }
+
+  function updateDashboard() {
+    const e = state.entities;
+
+    // Time
+    const now = new Date();
+    document.getElementById('currentTime').textContent = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    document.getElementById('currentDate').textContent = now.toLocaleDateString('en-US', {weekday:'short', day:'2-digit', month:'short'});
+    document.getElementById('lastUpdate').textContent = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+    // Gauges
+    if (e.solarPower !== undefined) {
+      createRingGauge('solarGauge', e.solarPower, 10, 'kW', colors.solar);
+      document.getElementById('solarLabel').textContent = e.solarPower.toFixed(2) + ' kW';
+    }
+
+    if (e.batterySoC !== undefined) {
+      createRingGauge('batteryGauge', e.batterySoC, 100, '%', colors.battery);
+      document.getElementById('batteryLabel').textContent = e.batterySoC.toFixed(0) + ' %';
+    }
+
+    if (e.batteryPower !== undefined) {
+      document.getElementById('batteryPowerLabel').textContent = (e.batteryPower > 0 ? 'Discharging' : 'Charging') + ' ' + Math.abs(e.batteryPower).toFixed(1) + ' kW';
+    }
+
+    if (e.loadPower !== undefined) {
+      createRingGauge('houseGauge', e.loadPower, 5, 'kW', colors.house);
+      document.getElementById('houseLabel').textContent = e.loadPower.toFixed(2) + ' kW';
+    }
+
+    if (e.gridPower !== undefined) {
+      createRingGauge('gridGauge', Math.abs(e.gridPower), 5, 'kW', colors.grid);
+      document.getElementById('gridLabel').textContent = (e.gridPower > 0 ? 'Importing' : 'Exporting') + ' ' + Math.abs(e.gridPower).toFixed(2) + ' kW';
+    }
+
+    // Renewables ring
+    if (e.renewables !== undefined) {
+      const circ = 2 * Math.PI * 42;
+      const dash = (e.renewables / 100) * circ;
+      const arc = document.getElementById('renewablesArc');
+      const col = colors.renewables(e.renewables);
+      arc.setAttribute('stroke-dasharray', `${dash.toFixed(1)} ${circ}`);
+      arc.setAttribute('stroke', col);
+      document.getElementById('renewablesPct').textContent = e.renewables.toFixed(0) + '%';
+      document.getElementById('renewablesPct').style.color = col;
+    }
+
+    // Prices
+    if (e.importPrice !== undefined) document.getElementById('importPrice').textContent = e.importPrice.toFixed(2) + ' c/kWh';
+    if (e.exportPrice !== undefined) document.getElementById('exportPrice').textContent = e.exportPrice.toFixed(2) + ' c/kWh';
+    if (e.priceLevel !== undefined) document.getElementById('priceLevel').textContent = e.priceLevel;
+
+    // Forecast
+    if (e.forecastToday !== undefined) document.getElementById('forecastToday').textContent = e.forecastToday.toFixed(1) + ' kWh';
+    if (e.forecastTomorrow !== undefined) document.getElementById('forecastTomorrow').textContent = e.forecastTomorrow.toFixed(1) + ' kWh';
+
+    // Battery info
+    if (e.batteryMode !== undefined) document.getElementById('batteryMode').textContent = e.batteryMode;
+    if (e.batteryHealth !== undefined) document.getElementById('batteryHealth').textContent = e.batteryHealth.toFixed(0) + ' %';
+
+    // Today's summary
+    if (e.solarGenerated !== undefined) document.getElementById('solarGenerated').textContent = e.solarGenerated.toFixed(2) + ' kWh';
+    if (e.importedKwh !== undefined) document.getElementById('importedToday').textContent = e.importedKwh.toFixed(2) + ' kWh';
+    if (e.exportedKwh !== undefined) document.getElementById('exportedToday').textContent = e.exportedKwh.toFixed(2) + ' kWh';
+    if (e.netToday !== undefined) document.getElementById('netEarnings').textContent = '$' + e.netToday.toFixed(2);
+
+    // Status
+    updateStatus();
+    updateConnectionStatus();
+  }
+
+  function updateStatus() {
+    const e = state.entities;
+    const inverter = e.inverterStatus ? (e.inverterStatus === 'online' ? 'Online' : 'Offline') : '--';
+    const battery = e.batteryStatus ? (e.batteryStatus === 'online' ? 'Online' : 'Offline') : '--';
+
+    document.getElementById('inverterStatusText').textContent = inverter;
+    document.getElementById('batteryStatusText').textContent = battery;
+    document.getElementById('systemStatusText').textContent = inverter === 'Online' && battery === 'Online' ? 'Normal' : 'Warning';
+
+    const green = '#22c55e';
+    const yellow = '#eab308';
+    const red = '#ef4444';
+
+    const inverterColor = inverter === 'Online' ? green : red;
+    const batteryColor = battery === 'Online' ? green : red;
+    const systemColor = (inverter === 'Online' && battery === 'Online') ? green : yellow;
+
+    document.getElementById('inverterStatusIndicator').style.backgroundColor = inverterColor;
+    document.getElementById('batteryStatusIndicator').style.backgroundColor = batteryColor;
+    document.getElementById('systemStatusIndicator').style.backgroundColor = systemColor;
+    document.getElementById('systemStatus').style.backgroundColor = systemColor;
+  }
+
+  function updateConnectionStatus() {
+    const hasData = Object.keys(state.entities).length > 0;
+    const status = document.getElementById('connectionStatus');
+
+    if (hasData) {
+      status.textContent = '✓ Connected';
+      status.className = 'px-3 py-1 rounded bg-green-500/20 text-green-400 text-xs font-semibold';
+      state.connected = true;
+    } else {
+      status.textContent = CONFIG.HA_TOKEN ? '✗ No Data' : '⚙️ Configure';
+      status.className = 'px-3 py-1 rounded bg-yellow-500/20 text-yellow-400 text-xs font-semibold cursor-pointer';
+      if (!CONFIG.HA_TOKEN) status.onclick = () => document.getElementById('configModal').classList.remove('hidden');
+      state.connected = false;
+    }
+  }
+
+  function createHistoryChart() {
+    const ctx = document.getElementById('historyChart');
+    if (chart) chart.destroy();
+
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+        datasets: [
+          { label: 'Solar', data: [0, 0, 2, 8, 5, 0.5, 0], borderColor: '#fbbf24', backgroundColor: 'rgba(251,191,36,0.1)', fill: true, tension: 0.4, pointRadius: 0 },
+          { label: 'House', data: [1, 1, 2, 3, 2.5, 2, 1.5], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.4, pointRadius: 0 },
+          { label: 'Grid', data: [-1, -1, 0, -5, -2, 1, 1], borderColor: '#a855f7', backgroundColor: 'rgba(168,85,247,0.1)', fill: true, tension: 0.4, pointRadius: 0 },
+          { label: 'Battery', data: [2, 2, 1, -3, 0.5, 1, 1.5], borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)', fill: true, tension: 0.4, pointRadius: 0 }
+        ]
+      },
+      options: {
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+          x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } }
+        }
+      }
+    });
+  }
+
+  // Init
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!CONFIG.HA_TOKEN) {
+      document.getElementById('configModal').classList.remove('hidden');
+    }
+
+    createHistoryChart();
+    updateDashboard();
+    fetchAllEntities();
+
+    setInterval(fetchAllEntities, 5000);
+  });
+
+  window.saveConfiguration = function() {
+    CONFIG.HA_URL = document.getElementById('haUrl').value;
+    CONFIG.HA_TOKEN = document.getElementById('haToken').value;
+
+    localStorage.setItem('voltiq_ha_url', CONFIG.HA_URL);
+    localStorage.setItem('voltiq_ha_token', CONFIG.HA_TOKEN);
+    localStorage.setItem('custom_solar_power', document.getElementById('customSolar').value);
+    localStorage.setItem('custom_battery_soc', document.getElementById('customBatterySoC').value);
+    localStorage.setItem('custom_grid_power', document.getElementById('customGrid').value);
+    localStorage.setItem('custom_load_power', document.getElementById('customLoad').value);
+
+    document.getElementById('configModal').classList.add('hidden');
+    fetchAllEntities();
+  };
+</script>
+</body>
+</html>
