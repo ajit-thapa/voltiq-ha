@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Energy Command Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,100..900&family=Poppins:wght@100..900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://code.iconify.design/iconify-icon/3.0.0/iconify-icon.min.js"></script>
+  <style type="text/tailwindcss">
+    @import "tailwindcss";
+    @theme inline {
+      --color-background: #05070a;
+      --color-foreground: #f8fafc;
+      --color-primary: #fbbf24;
+      --color-primary-foreground: #05070a;
+      --color-secondary: #22c55e;
+      --color-tertiary: #3b82f6;
+      --color-muted: #1e293b;
+      --color-muted-foreground: #94a3b8;
+      --color-accent: #a855f7;
+      --color-destructive: #ef4444;
+      --color-card: #0f172a;
+      --color-border: #1e293b;
+      --color-input: #1e293b;
+      --color-ring: #fbbf24;
+      --radius: 0.75rem;
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--color-background);
+      color: var(--color-foreground);
+    }
+    .gauge-ring text {
+      fill: currentColor;
+    }
+    .loading {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .error-badge {
+      background-color: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+<div class="min-h-screen flex flex-col lg:flex-row bg-background text-foreground overflow-hidden">
+  <!-- Sidebar -->
+  <aside class="w-20 lg:w-24 bg-card border-r border-border flex flex-col items-center py-6 gap-8">
+    <div class="p-3 bg-secondary/20 rounded-xl text-secondary">
+      <iconify-icon icon="lucide:zap" class="text-2xl"></iconify-icon>
+    </div>
+    <nav class="flex flex-col gap-6 flex-1">
+      <button class="p-3 rounded-xl bg-primary/10 text-primary"><iconify-icon icon="lucide:layout-dashboard" class="text-2xl"></iconify-icon></button>
+      <button class="p-3 rounded-xl text-muted-foreground hover:bg-muted/50 transition-colors"><iconify-icon icon="lucide:house" class="text-2xl"></iconify-icon></button>
+      <button class="p-3 rounded-xl text-muted-foreground hover:bg-muted/50 transition-colors"><iconify-icon icon="lucide:layers" class="text-2xl"></iconify-icon></button>
+      <button class="p-3 rounded-xl text-muted-foreground hover:bg-muted/50 transition-colors"><iconify-icon icon="lucide:camera" class="text-2xl"></iconify-icon></button>
+      <button class="p-3 rounded-xl text-muted-foreground hover:bg-muted/50 transition-colors"><iconify-icon icon="lucide:settings" class="text-2xl"></iconify-icon></button>
+    </nav>
+    <div class="mt-auto flex flex-col items-center gap-2">
+      <!-- Renewables Ring -->
+      <div id="renewablesRing" class="relative w-16 h-16">
+        <svg class="w-full h-full" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="42" stroke="#1e293b" stroke-width="8" fill="none" />
+          <circle id="renewablesArc" cx="50" cy="50" r="42" stroke="currentColor" stroke-width="8" fill="none" stroke-dasharray="0 264" stroke-linecap="round" transform="rotate(-90 50 50)" class="text-secondary" />
+        </svg>
+        <div class="absolute inset-0 flex items-center justify-center text-xs font-bold text-secondary" id="renewablesPct">--</div>
+      </div>
+      <span class="text-[10px] text-muted-foreground text-center">Renewables</span>
+      <div id="systemStatus" class="w-2 h-2 rounded-full bg-gray-500 mt-2" title="System status"></div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="flex-1 flex flex-col overflow-y-auto max-h-screen p-6 gap-6">
+    <!-- Header -->
+    <header class="flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-heading font-bold flex items-center gap-2">
+          <iconify-icon icon="lucide:zap" class="text-primary"></iconify-icon>
+          Energy Command Center
+        </h1>
+        <p class="text-muted-foreground text-sm">Real-time monitoring from Home Assistant</p>
+      </div>
+      <div class="flex items-center gap-6 text-sm text-muted-foreground">
+        <div id="connectionStatus" class="px-3 py-1 rounded bg-red-500/20 text-red-400 text-xs font-semibold">
+          Connecting...
+        </div>
+        <div class="text-right">
+          <div class="font-bold text-foreground" id="currentTime">--:--</div>
+          <div class="text-xs" id="currentDate">--</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Ring Gauges Row -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <!-- Solar gauge (ring) -->
+      <div class="bg-card border border-border rounded-xl p-4 flex flex-col items-center gap-3">
+        <div class="flex items-center gap-2 self-start">
+          <iconify-icon icon="lucide:sun" class="text-primary"></iconify-icon>
+          <span class="text-xs font-semibold uppercase tracking-wider">Solar</span>
+        </div>
+        <div id="solarGauge" class="w-28 h-28"></div>
+        <div class="text-[10px] text-primary mt-1" id="solarLabel">0 kW</div>
+        <div class="text-[10px] text-muted-foreground" id="solarConfig" style="display:none;" class="error-badge">Configure solar entity</div>
+      </div>
+
+      <!-- Battery gauge (ring) -->
+      <div class="bg-card border border-border rounded-xl p-4 flex flex-col items-center gap-3">
+        <div class="flex items-center gap-2 self-start">
+          <iconify-icon icon="lucide:battery" class="text-secondary"></iconify-icon>
+          <span class="text-xs font-semibold uppercase tracking-wider">Battery</span>
+        </div>
+        <div id="batteryGauge" class="w-28 h-28"></div>
+        <div class="text-[10px] text-secondary" id="batteryLabel">-- %</div>
+        <div class="text-[10px] text-muted-foreground" id="batteryConfig" style="display:none;" class="error-badge">Configure battery entity</div>
+      </div>
+
+      <!-- House Load gauge (ring) -->
+      <div class="bg-card border border-border rounded-xl p-4 flex flex-col items-center gap-3">
+        <div class="flex items-center gap-2 self-start">
+          <iconify-icon icon="lucide:house" class="text-tertiary"></iconify-icon>
+          <span class="text-xs font-semibold uppercase tracking-wider">House Load</span>
+        </div>
+        <div id="houseGauge" class="w-28 h-28"></div>
+        <div class="text-[10px] text-tertiary" id="houseLabel">0 kW</div>
+        <div class="text-[10px] text-muted-foreground" id="houseConfig" style="display:none;" class="error-badge">Configure load entity</div>
+      </div>
+
+      <!-- Grid gauge (ring) -->
+      <div class="bg-card border border-border rounded-xl p-4 flex flex-col items-center gap-3">
+        <div class="flex items-center gap-2 self-start">
+          <iconify-icon icon="lucide:zap" class="text-accent"></iconify-icon>
+          <span class="text-xs font-semibold uppercase tracking-wider">Grid</span>
+        </div>
+        <div id="gridGauge" class="w-28 h-28"></div>
+        <div class="text-[10px] text-accent" id="gridLabel">0 kW</div>
+        <div class="text-[10px] text-muted-foreground" id="gridConfig" style="display:none;" class="error-badge">Configure grid entity</div>
+      </div>
+    </div>
+
+    <!-- Price Forecast & Battery Control -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <!-- Price Forecast Bar Chart -->
+      <div class="lg:col-span-7 bg-card border border-border rounded-xl p-6">
+        <h3 class="text-xs font-semibold uppercase tracking-wider mb-4">Price Forecast (24h)</h3>
+        <div class="h-64">
+          <canvas id="forecastChart" height="160"></canvas>
+        </div>
+        <div class="flex justify-center gap-6 mt-3 text-[10px]">
+          <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-green-500"></span> Cheap</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-yellow-400"></span> Normal</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-orange-500"></span> Expensive</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-red-500"></span> Spike</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-purple-500"></span> Negative</span>
+        </div>
+        <div id="forecastConfig" style="display:none;" class="mt-3 error-badge">Configure price forecast entity</div>
+      </div>
+
+      <!-- Battery Control Panel -->
+      <div class="lg:col-span-5 bg-card border border-border rounded-xl p-6 flex flex-col gap-5">
+        <h3 class="text-xs font-semibold uppercase tracking-wider">⚡ Battery Control</h3>
+        <div class="flex flex-col gap-4">
+          <div>
+            <label class="text-xs text-muted-foreground block mb-1">Mode</label>
+            <select id="batteryMode" class="w-full bg-background border border-border rounded-lg p-2 text-sm text-foreground outline-none focus:border-primary" disabled>
+              <option value="">Not configured</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-muted-foreground block mb-1">Minimum SoC: <span id="minSocValue">--</span>%</label>
+            <input type="range" id="minSocSlider" class="w-full accent-primary" min="5" max="100" value="20" step="1" disabled />
+          </div>
+          <div>
+            <label class="text-xs text-muted-foreground block mb-1">Max Export (kW): <span id="maxExportValue">--</span></label>
+            <input type="range" id="maxExportSlider" class="w-full accent-primary" min="0" max="10" value="5" step="0.1" disabled />
+          </div>
+          <p class="text-[10px] text-muted-foreground mt-2">Controls are linked to Home Assistant automations</p>
+          <div id="batteryControlConfig" style="display:none;" class="error-badge">Configure battery control entities</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Earnings & History -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <!-- Earnings Summary -->
+      <div class="lg:col-span-4 bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider">💰 Earnings</h3>
+        <div class="flex justify-between items-end">
+          <div>
+            <p class="text-muted-foreground text-xs">Import cost</p>
+            <p class="text-lg font-bold text-red-400" id="importCost">--</p>
+          </div>
+          <div>
+            <p class="text-muted-foreground text-xs">Export earnings</p>
+            <p class="text-lg font-bold text-green-400" id="exportEarnings">--</p>
+          </div>
+          <div>
+            <p class="text-muted-foreground text-xs">Net profit</p>
+            <p class="text-lg font-bold text-primary" id="netProfit">--</p>
+          </div>
+        </div>
+        <div class="h-32">
+          <canvas id="earningsChart" height="80"></canvas>
+        </div>
+        <div class="flex gap-4 text-[10px] text-muted-foreground">
+          <span>This week: <span id="weekEarnings" class="text-foreground">--</span></span>
+          <span>This month: <span id="monthEarnings" class="text-foreground">--</span></span>
+        </div>
+        <div id="earningsConfig" style="display:none;" class="error-badge">Configure earnings entities</div>
+      </div>
+
+      <!-- Energy History Chart -->
+      <div class="lg:col-span-8 bg-card border border-border rounded-xl p-6">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-xs font-semibold uppercase tracking-wider">Power History (24h)</h3>
+          <div class="flex gap-4 text-[10px] text-muted-foreground uppercase">
+            <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-primary"></span> Solar</div>
+            <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-tertiary"></span> House</div>
+            <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-accent"></span> Grid</div>
+            <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-secondary"></span> Battery</div>
+          </div>
+        </div>
+        <div class="h-64">
+          <canvas id="historyChart" height="160"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-auto flex justify-between items-center text-[10px] text-muted-foreground pt-4 border-t border-border">
+      <div class="flex gap-6">
+        <span class="flex items-center gap-2"><span id="systemStatusIndicator" class="w-2 h-2 rounded-full bg-gray-500"></span> System: <span id="systemStatusText">Unknown</span></span>
+        <span class="flex items-center gap-2"><span id="backendStatusIndicator" class="w-2 h-2 rounded-full bg-gray-500"></span> Backend: <span id="backendStatusText">Unknown</span></span>
+      </div>
+      <span>Last updated: <span id="lastUpdate">--</span></span>
+    </footer>
+  </main>
+</div>
+
+<script>
+  // ---------- Configuration ----------
+  // These should be set via query parameters or environment variables in production
+  const CONFIG = {
+    // Home Assistant Configuration
+    HA_URL: new URLSearchParams(window.location.search).get('ha_url') || localStorage.getItem('ha_url') || window.location.origin,
+    HA_TOKEN: new URLSearchParams(window.location.search).get('ha_token') || localStorage.getItem('ha_token') || '',
+
+    // Entity mappings - configure these based on your integrations
+    ENTITIES: {
+      solarPower: new URLSearchParams(window.location.search).get('solar_entity') || localStorage.getItem('solar_entity') || 'sensor.solar_power',
+      batterySoC: new URLSearchParams(window.location.search).get('battery_soc_entity') || localStorage.getItem('battery_soc_entity') || 'sensor.battery_soc',
+      batteryPower: new URLSearchParams(window.location.search).get('battery_power_entity') || localStorage.getItem('battery_power_entity') || 'sensor.battery_power',
+      gridPower: new URLSearchParams(window.location.search).get('grid_entity') || localStorage.getItem('grid_entity') || 'sensor.grid_power',
+      loadPower: new URLSearchParams(window.location.search).get('load_entity') || localStorage.getItem('load_entity') || 'sensor.house_load',
+      renewables: new URLSearchParams(window.location.search).get('renewables_entity') || localStorage.getItem('renewables_entity') || 'sensor.grid_renewables',
+      importPrice: new URLSearchParams(window.location.search).get('import_price_entity') || localStorage.getItem('import_price_entity') || 'sensor.import_price',
+      exportPrice: new URLSearchParams(window.location.search).get('export_price_entity') || localStorage.getItem('export_price_entity') || 'sensor.export_price',
+      priceForecast: new URLSearchParams(window.location.search).get('forecast_entity') || localStorage.getItem('forecast_entity') || 'sensor.price_forecast',
+      batteryMode: new URLSearchParams(window.location.search).get('battery_mode_entity') || localStorage.getItem('battery_mode_entity') || 'select.battery_mode',
+    }
+  };
+
+  // ---------- State Management ----------
+  let wsConnection = null;
+  let state = {
+    solar: null,
+    batterySoC: null,
+    batteryPower: null,
+    house: null,
+    grid: null,
+    renewables: null,
+    importPrice: null,
+    exportPrice: null,
+    priceForecast: [],
+    lastUpdate: new Date(),
+    hasError: false,
+    missingEntities: []
+  };
+
+  let charts = {
+    history: null,
+    forecast: null,
+    earnings: null
+  };
+
+  // ---------- Ring Gauge Component ----------
+  function createRingGauge(containerId, value, max, unit, colorFunc) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (value === null || value === undefined) {
+      container.innerHTML = '<div class="text-xs text-muted-foreground text-center">No data</div>';
+      return;
+    }
+
+    const pct = Math.min(1, value / max);
+    const circumference = 2 * Math.PI * 42;
+    const dash = pct * circumference;
+    const color = colorFunc(value);
+
+    container.innerHTML = `
+      <svg class="w-full h-full" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="42" stroke="#1e293b" stroke-width="8" fill="none" />
+        <circle cx="50" cy="50" r="42" stroke="currentColor" stroke-width="8" fill="none"
+          stroke-dasharray="${dash.toFixed(1)} ${circumference}" stroke-linecap="round"
+          transform="rotate(-90 50 50)" style="color:${color}" />
+        <text x="50" y="46" text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="700" fill="${color}">
+          ${typeof value === 'number' ? value.toFixed(unit === '%' ? 0 : 1) : '--'}
+        </text>
+        <text x="50" y="62" text-anchor="middle" font-size="8" fill="#94a3b8">${unit}</text>
+      </svg>`;
+  }
+
+  // Color functions
+  const colorFuncs = {
+    solar: (val) => '#fbbf24',
+    battery: (soc) => soc < 20 ? '#ef4444' : soc < 50 ? '#f59e0b' : '#22c55e',
+    house: (val) => val < 2 ? '#3b82f6' : val < 4 ? '#3b82f6' : '#ef4444',
+    grid: (val) => val > 0 ? '#ef4444' : '#22c55e',
+    renewables: (pct) => pct < 30 ? '#ef4444' : pct < 70 ? '#f59e0b' : '#22c55e'
+  };
+
+  // ---------- Home Assistant Integration ----------
+  async function fetchEntity(entityId) {
+    if (!CONFIG.HA_TOKEN) {
+      console.warn('Home Assistant token not configured');
+      return null;
+    }
+
+    try {
+      const response = await fetch(`${CONFIG.HA_URL}/api/states/${entityId}`, {
+        headers: {
+          'Authorization': `Bearer ${CONFIG.HA_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        console.warn(`Entity ${entityId} not found`);
+        return null;
+      }
+
+      const data = await response.json();
+      const value = parseFloat(data.state);
+      return isNaN(value) ? null : value;
+    } catch (error) {
+      console.error(`Error fetching ${entityId}:`, error);
+      return null;
+    }
+  }
+
+  async function updateAllEntities() {
+    try {
+      const [solar, batterySoC, batteryPower, grid, house, renewables, importPrice, exportPrice] = await Promise.all([
+        fetchEntity(CONFIG.ENTITIES.solarPower),
+        fetchEntity(CONFIG.ENTITIES.batterySoC),
+        fetchEntity(CONFIG.ENTITIES.batteryPower),
+        fetchEntity(CONFIG.ENTITIES.gridPower),
+        fetchEntity(CONFIG.ENTITIES.loadPower),
+        fetchEntity(CONFIG.ENTITIES.renewables),
+        fetchEntity(CONFIG.ENTITIES.importPrice),
+        fetchEntity(CONFIG.ENTITIES.exportPrice),
+      ]);
+
+      // Update state
+      if (solar !== null) state.solar = solar;
+      if (batterySoC !== null) state.batterySoC = batterySoC;
+      if (batteryPower !== null) state.batteryPower = batteryPower;
+      if (grid !== null) state.grid = grid;
+      if (house !== null) state.house = house;
+      if (renewables !== null) state.renewables = renewables;
+      if (importPrice !== null) state.importPrice = importPrice;
+      if (exportPrice !== null) state.exportPrice = exportPrice;
+
+      state.lastUpdate = new Date();
+      updateDashboard();
+    } catch (error) {
+      console.error('Error updating entities:', error);
+    }
+  }
+
+  // ---------- Dashboard Updates ----------
+  function updateDashboard() {
+    // Time
+    const now = new Date();
+    document.getElementById('currentTime').textContent = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    document.getElementById('currentDate').textContent = now.toLocaleDateString('en-US', {weekday:'short', day:'2-digit', month:'short'});
+    document.getElementById('lastUpdate').textContent = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+    // Gauges
+    createRingGauge('solarGauge', state.solar, 10, 'kW', colorFuncs.solar);
+    createRingGauge('batteryGauge', state.batterySoC, 100, '%', colorFuncs.battery);
+    createRingGauge('houseGauge', state.house, 5, 'kW', colorFuncs.house);
+    createRingGauge('gridGauge', state.grid !== null ? Math.abs(state.grid) : null, 5, 'kW', colorFuncs.grid);
+
+    // Labels
+    if (state.solar !== null) {
+      document.getElementById('solarLabel').textContent = state.solar.toFixed(2) + ' kW';
+    }
+    if (state.batterySoC !== null) {
+      document.getElementById('batteryLabel').textContent = state.batterySoC.toFixed(0) + ' %';
+    }
+    if (state.house !== null) {
+      document.getElementById('houseLabel').textContent = state.house.toFixed(2) + ' kW';
+    }
+    if (state.grid !== null) {
+      document.getElementById('gridLabel').textContent = (state.grid > 0 ? 'Importing' : 'Exporting') + ' ' + Math.abs(state.grid).toFixed(2) + ' kW';
+    }
+
+    // Renewables ring
+    if (state.renewables !== null) {
+      const circ = 2 * Math.PI * 42;
+      const dash = (state.renewables / 100) * circ;
+      const rArc = document.getElementById('renewablesArc');
+      const rPct = document.getElementById('renewablesPct');
+      const col = colorFuncs.renewables(state.renewables);
+      rArc.setAttribute('stroke-dasharray', `${dash.toFixed(1)} ${circ}`);
+      rArc.style.color = col;
+      rPct.textContent = state.renewables.toFixed(0) + '%';
+      rPct.style.color = col;
+    }
+
+    // Earnings
+    if (state.importPrice !== null) {
+      document.getElementById('importCost').textContent = `$${state.importPrice.toFixed(2)}`;
+    }
+    if (state.exportPrice !== null) {
+      document.getElementById('exportEarnings').textContent = `$${state.exportPrice.toFixed(2)}`;
+    }
+    if (state.importPrice !== null && state.exportPrice !== null) {
+      const net = state.exportPrice - state.importPrice;
+      document.getElementById('netProfit').textContent = `$${net.toFixed(2)}`;
+    }
+
+    // Update connection status
+    updateConnectionStatus();
+  }
+
+  function updateConnectionStatus() {
+    const connected = CONFIG.HA_TOKEN && state.solar !== null;
+    const statusEl = document.getElementById('connectionStatus');
+    const systemStatusEl = document.getElementById('systemStatus');
+
+    if (connected) {
+      statusEl.textContent = '✓ Connected';
+      statusEl.className = 'px-3 py-1 rounded bg-green-500/20 text-green-400 text-xs font-semibold';
+      systemStatusEl.className = 'w-2 h-2 rounded-full bg-green-500';
+      document.getElementById('systemStatusIndicator').className = 'w-2 h-2 rounded-full bg-green-500';
+      document.getElementById('systemStatusText').textContent = 'Normal';
+    } else {
+      statusEl.textContent = 'Configuring...';
+      statusEl.className = 'px-3 py-1 rounded bg-yellow-500/20 text-yellow-400 text-xs font-semibold';
+      systemStatusEl.className = 'w-2 h-2 rounded-full bg-yellow-500';
+      document.getElementById('systemStatusIndicator').className = 'w-2 h-2 rounded-full bg-yellow-500';
+      document.getElementById('systemStatusText').textContent = 'Initializing';
+    }
+  }
+
+  // ---------- Charts ----------
+  function createHistoryChart() {
+    const ctx = document.getElementById('historyChart');
+    if (charts.history) charts.history.destroy();
+
+    charts.history = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+        datasets: [
+          { label: 'Solar', data: [0, 0, 2, 8, 5, 0.5, 0], borderColor: '#fbbf24', backgroundColor: 'rgba(251,191,36,0.1)', fill: true, tension: 0.4, pointRadius: 0 },
+          { label: 'House', data: [1, 1, 2, 3, 2.5, 2, 1.5], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.4, pointRadius: 0 },
+          { label: 'Grid', data: [-1, -1, 0, -5, -2, 1, 1], borderColor: '#a855f7', backgroundColor: 'rgba(168,85,247,0.1)', fill: true, tension: 0.4, pointRadius: 0 },
+          { label: 'Battery', data: [2, 2, 1, -3, 0.5, 1, 1.5], borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)', fill: true, tension: 0.4, pointRadius: 0 }
+        ]
+      },
+      options: {
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+          x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } }
+        }
+      }
+    });
+  }
+
+  function createForecastChart() {
+    const ctx = document.getElementById('forecastChart');
+    if (charts.forecast) charts.forecast.destroy();
+
+    const labels = ['Now', '4h', '8h', '12h', '16h', '20h', '24h'];
+    const data = [0.12, 0.28, 0.45, 0.08, -0.02, 0.55, 0.35];
+
+    const colors = data.map(p => {
+      if (p < 0) return '#a855f7';
+      if (p < 0.15) return '#22c55e';
+      if (p < 0.30) return '#eab308';
+      if (p < 0.50) return '#f97316';
+      return '#ef4444';
+    });
+
+    charts.forecast = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Price $/kWh',
+          data: data,
+          backgroundColor: colors,
+          borderColor: colors,
+          borderWidth: 1
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { callback: v => '$'+v, color: '#94a3b8', font: { size: 10 } } },
+          x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } }
+        }
+      }
+    });
+  }
+
+  function createEarningsChart() {
+    const ctx = document.getElementById('earningsChart');
+    if (charts.earnings) charts.earnings.destroy();
+
+    charts.earnings = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Import Cost', 'Export Earnings'],
+        datasets: [{
+          data: [state.importPrice || 0, state.exportPrice || 0],
+          backgroundColor: ['#ef4444', '#22c55e'],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        cutout: '70%'
+      }
+    });
+  }
+
+  // ---------- Initialization ----------
+  document.addEventListener('DOMContentLoaded', () => {
+    // Setup configuration UI
+    setupConfigurationUI();
+
+    // Initialize charts
+    createHistoryChart();
+    createForecastChart();
+    createEarningsChart();
+
+    // Initial update
+    updateDashboard();
+
+    // Set up periodic updates (poll every 5 seconds)
+    setInterval(updateAllEntities, 5000);
+
+    // Initial fetch
+    updateAllEntities();
+  });
+
+  // Configuration UI
+  function setupConfigurationUI() {
+    // Check if token is configured
+    if (!CONFIG.HA_TOKEN) {
+      const configBtn = document.createElement('button');
+      configBtn.className = 'fixed bottom-6 right-6 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-semibold';
+      configBtn.textContent = '⚙️ Configure';
+      configBtn.onclick = () => openConfigurationModal();
+      document.body.appendChild(configBtn);
+    }
+  }
+
+  function openConfigurationModal() {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
+    modal.innerHTML = `
+      <div class="bg-card border border-border rounded-xl p-6 max-w-md w-full max-h-96 overflow-y-auto">
+        <h2 class="text-lg font-bold mb-4">Configure Home Assistant</h2>
+        <div class="space-y-4">
+          <div>
+            <label class="text-xs text-muted-foreground block mb-1">Home Assistant URL</label>
+            <input type="text" id="haUrl" class="w-full bg-background border border-border rounded-lg p-2 text-sm text-foreground" placeholder="http://homeassistant.local:8123" value="${CONFIG.HA_URL}" />
+          </div>
+          <div>
+            <label class="text-xs text-muted-foreground block mb-1">API Token</label>
+            <input type="password" id="haToken" class="w-full bg-background border border-border rounded-lg p-2 text-sm text-foreground" placeholder="Your HA API token" />
+          </div>
+          <div>
+            <label class="text-xs text-muted-foreground block mb-1">Solar Power Entity</label>
+            <input type="text" id="solarEntity" class="w-full bg-background border border-border rounded-lg p-2 text-sm text-foreground" value="${CONFIG.ENTITIES.solarPower}" />
+          </div>
+          <div>
+            <label class="text-xs text-muted-foreground block mb-1">Battery SoC Entity</label>
+            <input type="text" id="batteryEntity" class="w-full bg-background border border-border rounded-lg p-2 text-sm text-foreground" value="${CONFIG.ENTITIES.batterySoC}" />
+          </div>
+          <div>
+            <label class="text-xs text-muted-foreground block mb-1">Grid Power Entity</label>
+            <input type="text" id="gridEntity" class="w-full bg-background border border-border rounded-lg p-2 text-sm text-foreground" value="${CONFIG.ENTITIES.gridPower}" />
+          </div>
+          <div>
+            <label class="text-xs text-muted-foreground block mb-1">House Load Entity</label>
+            <input type="text" id="loadEntity" class="w-full bg-background border border-border rounded-lg p-2 text-sm text-foreground" value="${CONFIG.ENTITIES.loadPower}" />
+          </div>
+          <button onclick="saveConfiguration()" class="w-full bg-primary text-primary-foreground font-semibold py-2 rounded-lg">Save Configuration</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    modal.onclick = (e) => e.target === modal && modal.remove();
+  }
+
+  window.saveConfiguration = function() {
+    CONFIG.HA_URL = document.getElementById('haUrl').value;
+    CONFIG.HA_TOKEN = document.getElementById('haToken').value;
+    CONFIG.ENTITIES.solarPower = document.getElementById('solarEntity').value;
+    CONFIG.ENTITIES.batterySoC = document.getElementById('batteryEntity').value;
+    CONFIG.ENTITIES.gridPower = document.getElementById('gridEntity').value;
+    CONFIG.ENTITIES.loadPower = document.getElementById('loadEntity').value;
+
+    localStorage.setItem('ha_url', CONFIG.HA_URL);
+    localStorage.setItem('ha_token', CONFIG.HA_TOKEN);
+    localStorage.setItem('solar_entity', CONFIG.ENTITIES.solarPower);
+    localStorage.setItem('battery_soc_entity', CONFIG.ENTITIES.batterySoC);
+    localStorage.setItem('grid_entity', CONFIG.ENTITIES.gridPower);
+    localStorage.setItem('load_entity', CONFIG.ENTITIES.loadPower);
+
+    location.reload();
+  };
+</script>
+</body>
+</html>

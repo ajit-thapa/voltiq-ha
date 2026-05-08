@@ -143,7 +143,7 @@ def _build_overview_view(
 ) -> dict:
     cards: list[dict] = []
 
-    # Status header
+    # Status header with system health
     cards.append({
         "type": "horizontal-stack",
         "cards": [
@@ -161,7 +161,12 @@ def _build_overview_view(
             {
                 "type": "entity",
                 "entity": f"binary_sensor.voltiq_energy_manager_price_spike",
-                "name": "Spike",
+                "name": "Price Alert",
+            },
+            {
+                "type": "entity",
+                "entity": _e(eid, "system_healthy"),
+                "name": "System",
             },
         ],
     })
@@ -559,11 +564,22 @@ def _build_settings_view(eid: str) -> dict:
 
     cards.append({
         "type": "markdown",
-        "title": "Sensor Mapping",
+        "title": "Sensor Mapping Guide",
         "content": (
-            "Configure external sensors in **Settings > Integrations > Voltiq > Configure**.\n\n"
-            "Map your solar inverter, battery, and grid sensors so the Voltiq dashboard "
-            "displays data from your actual hardware."
+            "## Configure External Integrations\n\n"
+            "Map sensors from your energy hardware in **Settings > Integrations > Voltiq > Configure**.\n\n"
+            "### Supported Integrations\n\n"
+            "**Solar Inverters**: Fronius, SolarEdge, Huawei, Victron, MQTT\n"
+            "**Battery Systems**: Tesla Powerwall, Victron, LiFePO4, Solax, MQTT\n"
+            "**Grid/Meter**: Shelly, Sense, Volkszahler, MQTT, local inverter API\n"
+            "**Pricing**: Amber, Octopus Energy, AEMO, Tibber, Custom\n\n"
+            "### What to Map\n\n"
+            "- **Solar Power**: Current generation (kW) from inverter\n"
+            "- **Battery SoC**: State of charge (%) from BMS\n"
+            "- **Battery Power**: Charge/discharge rate (kW, negative=charging)\n"
+            "- **Grid Power**: Import/export (kW, negative=export)\n"
+            "- **House Load**: Current consumption (kW)\n"
+            "- **Prices**: Import and export electricity rates ($/kWh)"
         ),
     })
 
