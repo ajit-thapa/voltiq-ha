@@ -46,13 +46,6 @@ _BATTERY_SELECTOR = selector.EntitySelector(
         multiple=False,
     )
 )
-_MONETARY_SELECTOR = selector.EntitySelector(
-    selector.EntitySelectorConfig(
-        domain="sensor",
-        device_class="monetary",
-        multiple=False,
-    )
-)
 _SENSOR_SELECTOR = selector.EntitySelector(
     selector.EntitySelectorConfig(
         domain="sensor",
@@ -234,7 +227,7 @@ class VoltiqOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_sensors(self, user_input: dict | None = None) -> FlowResult:
         if user_input is not None:
-            self._options.update({k: v for k, v in user_input.items() if v})
+            self._options.update(user_input)
             return await self.async_step_energy()
 
         cur = self._current()
@@ -250,7 +243,7 @@ class VoltiqOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_energy(self, user_input: dict | None = None) -> FlowResult:
         if user_input is not None:
-            self._options.update({k: v for k, v in user_input.items() if v})
+            self._options.update(user_input)
             return await self.async_step_dashboard()
 
         cur = self._current()
