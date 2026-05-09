@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -14,6 +15,8 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     PERCENTAGE,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
     UnitOfEnergy,
     UnitOfPower,
     UnitOfTemperature,
@@ -27,8 +30,11 @@ from .const import (
     DOMAIN, MANUFACTURER,
     DATA_PRICES, DATA_SYSTEM, DATA_FORECAST,
     DATA_EARNINGS, DATA_ALERTS, DATA_ADVISOR,
+    SENSOR_ENTITY_MAP, SENSOR_BOUNDS,
 )
 from .coordinator import VoltiqCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -283,16 +289,32 @@ def _resolve(data: dict, path: str) -> Any:
     return val
 
 
+def _clamp(key: str, value: Any) -> Any:
+    """Return None for values outside sanity bounds (e.g. Modbus overflow)."""
+    if value is None or not isinstance(value, (int, float)):
+        return value
+    bounds = SENSOR_BOUNDS.get(key)
+    if bounds and not (bounds[0] <= float(value) <= bounds[1]):
+        _LOGGER.debug(
+            "Value %s for %s outside bounds %s, treating as unavailable",
+            value, key, bounds,
+        )
+        return None
+    return value
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VoltiqCoordinator = hass.data[DOMAIN][entry.entry_id]
+    cfg = dict(entry.data) | dict(entry.options)
     entities = []
     for desc in (
         *PRICE_SENSORS, *SYSTEM_SENSORS, *FORECAST_SENSORS,
         *EARNINGS_SENSORS, *ADVISOR_SENSORS, *ALERTS_SENSORS,
     ):
-        entities.append(VoltiqSensor(coordinator, desc, entry.entry_id))
+        mapped_entity_id = cfg.get(SENSOR_ENTITY_MAP.get(desc.key, ""), "")
+        entities.append(VoltiqSensor(coordinator, desc, entry.entry_id, mapped_entity_id))
     async_add_entities(entities)
 
 
@@ -305,10 +327,12 @@ class VoltiqSensor(CoordinatorEntity[VoltiqCoordinator], SensorEntity):
         coordinator: VoltiqCoordinator,
         description: VoltiqSensorDescription,
         entry_id: str,
+        mapped_entity_id: str = "",
     ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{entry_id}_{description.key}"
+        self._mapped_entity_id = mapped_entity_id
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry_id)},
             name="Voltiq Energy Manager",
@@ -318,29 +342,40 @@ class VoltiqSensor(CoordinatorEntity[VoltiqCoordinator], SensorEntity):
 
     @property
     def native_value(self) -> Any:
+        # If user mapped an external HA entity, read from it
+        if self._mapped_entity_id:
+            state = self.hass.states.get(self._mapped_entity_id)
+            if state and state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, None):
+                try:
+                    return _clamp(self.entity_description.key, float(state.state))
+                except (ValueError, TypeError):
+                    return state.state
+
+        # Otherwise read from coordinator data
         data = self.coordinator.data or {}
         section = data.get(self.entity_description.data_key, {}) or {}
-        return _resolve(section, self.entity_description.value_path)
+        raw = _resolve(section, self.entity_description.value_path)
+        return _clamp(self.entity_description.key, raw)
 
     @property
     def extra_state_attributes(self) -> dict:
+        attrs: dict[str, Any] = {}
+        if self._mapped_entity_id:
+            attrs["source_entity"] = self._mapped_entity_id
+
         data = self.coordinator.data or {}
         if self.entity_description.key == "import_price":
             prices = data.get(DATA_PRICES, {}) or {}
-            return {
-                "spike": prices.get("spike", False),
-                "forecast": prices.get("forecast_prices", [])[:6],
-            }
-        if self.entity_description.key == "solar_today_kwh":
+            attrs["spike"] = prices.get("spike", False)
+            attrs["forecast"] = prices.get("forecast_prices", [])[:6]
+        elif self.entity_description.key == "solar_today_kwh":
             forecast = data.get(DATA_FORECAST, {}) or {}
-            return {"hourly": forecast.get("hours", [])[:12]}
-        if self.entity_description.key == "alerts_count":
+            attrs["hourly"] = forecast.get("hours", [])[:12]
+        elif self.entity_description.key == "alerts_count":
             alerts = data.get(DATA_ALERTS, {}) or {}
-            return {
-                "items": alerts.get("items", []),
-                "latest_level": alerts.get("latest_level", ""),
-            }
-        if self.entity_description.key == "advisor_tip":
+            attrs["items"] = alerts.get("items", [])
+            attrs["latest_level"] = alerts.get("latest_level", "")
+        elif self.entity_description.key == "advisor_tip":
             advisor = data.get(DATA_ADVISOR, {}) or {}
-            return {"all_tips": advisor.get("tips", [])}
-        return {}
+            attrs["all_tips"] = advisor.get("tips", [])
+        return attrs

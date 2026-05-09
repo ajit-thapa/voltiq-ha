@@ -63,6 +63,36 @@ CONF_DASHBOARD_ENABLED = "dashboard_enabled"
 DASHBOARD_URL_PATH = "voltiq-energy"
 DASHBOARD_TITLE = "Voltiq Energy"
 
+# Map sensor description keys to their user-mapped entity config key.
+# When a user maps an external entity, the sensor reads from HA state
+# instead of coordinator data.
+SENSOR_ENTITY_MAP: dict[str, str] = {
+    "solar_power": CONF_ENTITY_SOLAR_POWER,
+    "battery_soc": CONF_ENTITY_BATTERY_SOC,
+    "battery_power": CONF_ENTITY_BATTERY_POWER,
+    "grid_power": CONF_ENTITY_GRID_POWER,
+    "load_power": CONF_ENTITY_LOAD_POWER,
+    "import_price": CONF_ENTITY_IMPORT_PRICE,
+    "feedin_price": CONF_ENTITY_EXPORT_PRICE,
+    "solar_today_kwh": CONF_ENTITY_SOLAR_FORECAST,
+}
+
+# Sanity bounds for numeric sensor values (key -> (min, max)).
+# Values outside these are treated as sensor errors (Modbus overflow etc).
+SENSOR_BOUNDS: dict[str, tuple[float, float]] = {
+    "solar_power": (-1, 200),
+    "battery_power": (-200, 200),
+    "grid_power": (-200, 200),
+    "load_power": (-1, 200),
+    "battery_soc": (0, 100),
+    "battery_soh": (0, 100),
+    "battery_temp": (-40, 80),
+    "battery_voltage": (0, 1000),
+    "import_price": (-500, 15000),
+    "feedin_price": (-500, 15000),
+    "renewables": (0, 100),
+}
+
 # Coordinator data section keys
 DATA_PRICES = "prices"
 DATA_SYSTEM = "system"

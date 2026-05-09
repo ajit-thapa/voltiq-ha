@@ -22,6 +22,7 @@ from .const import (
     DATA_PRICES, DATA_SYSTEM, DATA_EARNINGS,
     DATA_ALERTS, DATA_ADVISOR, DATA_SETTINGS, DATA_FORECAST,
     POLL_INTERVAL_PRICES,
+    SENSOR_BOUNDS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -196,56 +197,79 @@ class VoltiqCoordinator(DataUpdateCoordinator):
 
     async def _aemo(self) -> dict:
         region = self._cfg.get(CONF_AEMO_REGION, "NSW1")
+
+        # Try AEMO data API (newer endpoint)
+        try:
+            r = await self._client.get(
+                "https://aemo.com.au/aemo/apps/api/report/5MIN",
+                timeout=8,
+            )
+            if r.status_code == 200 and r.text.strip():
+                result = self._parse_aemo_5min(r.json(), region, "aemo")
+                if result:
+                    return result
+        except Exception as exc:
+            _LOGGER.debug("AEMO data API: %s", exc)
+
+        # Try AEMO visualisations API (legacy)
         try:
             r = await self._client.get(
                 "https://visualisations.aemo.com.au/aemo/apps/api/report/5MIN",
+                timeout=8,
             )
             if r.status_code == 200 and r.text.strip():
-                row = next(
-                    (d for d in r.json().get("5MIN", []) if d.get("REGIONID") == region),
-                    None,
-                )
-                if row:
-                    spot = float(row.get("RRP", 0)) / 10
-                    ip = round(spot + 10, 2)
-                    fip = round(spot * 0.92, 2)
-                    return {
-                        "import_price": ip,
-                        "feedin_price": fip,
-                        "descriptor": _descriptor(ip),
-                        "spike": ip > 300,
-                        "renewables": 45,
-                        "source": "aemo",
-                        "forecast_prices": [],
-                    }
+                result = self._parse_aemo_5min(r.json(), region, "aemo_vis")
+                if result:
+                    return result
         except Exception as exc:
-            _LOGGER.debug("AEMO primary: %s", exc)
-        # OpenNEM fallback
+            _LOGGER.debug("AEMO vis API: %s", exc)
+
+        # Try AEMO NEM web data
+        try:
+            r = await self._client.get(
+                f"https://data.opennem.org.au/v4/stats/au/NEM/{region}/power/7d.json",
+                timeout=10,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                price_series = None
+                for series in data.get("data", []):
+                    if series.get("type") == "price" or series.get("id", "").startswith("price"):
+                        price_series = series
+                        break
+                if price_series:
+                    values = price_series.get("history", {}).get("data", [])
+                    rrp = next((v for v in reversed(values) if v is not None), None)
+                    if rrp is not None:
+                        spot = float(rrp)
+                        ip = round(spot / 10 + 10, 2)
+                        fip = round(spot / 10 * 0.92, 2)
+                        return self._aemo_result(ip, fip, "opennem_v4")
+        except Exception as exc:
+            _LOGGER.debug("OpenNEM v4: %s", exc)
+
+        # OpenNEM legacy fallback
         try:
             nem = region.rstrip("1")
             r = await self._client.get(
                 f"https://api.opennem.org.au/stats/price/NEM/{nem}/",
+                timeout=10,
             )
-            series = r.json().get("data", [{}])[0].get("history", {})
-            rrp = next(
-                (v for v in reversed(series.get("data", [])) if v is not None),
-                None,
-            )
-            if rrp is not None:
-                spot = float(rrp)
-                ip = round(spot / 10 + 10, 2)
-                fip = round(spot / 10 * 0.92, 2)
-                return {
-                    "import_price": ip,
-                    "feedin_price": fip,
-                    "descriptor": _descriptor(ip),
-                    "spike": ip > 300,
-                    "renewables": 45,
-                    "source": "aemo_opennem",
-                    "forecast_prices": [],
-                }
+            if r.status_code == 200:
+                series = r.json().get("data", [{}])[0].get("history", {})
+                rrp = next(
+                    (v for v in reversed(series.get("data", [])) if v is not None),
+                    None,
+                )
+                if rrp is not None:
+                    spot = float(rrp)
+                    ip = round(spot / 10 + 10, 2)
+                    fip = round(spot / 10 * 0.92, 2)
+                    return self._aemo_result(ip, fip, "opennem_legacy")
         except Exception as exc:
-            _LOGGER.warning("AEMO fallback: %s", exc)
+            _LOGGER.warning("OpenNEM legacy: %s", exc)
+
+        _LOGGER.warning("All AEMO price sources failed for region %s", region)
         return {
             "import_price": 0,
             "feedin_price": 0,
@@ -256,7 +280,55 @@ class VoltiqCoordinator(DataUpdateCoordinator):
             "forecast_prices": [],
         }
 
+    def _parse_aemo_5min(self, data: dict, region: str, source: str) -> dict | None:
+        row = next(
+            (d for d in data.get("5MIN", []) if d.get("REGIONID") == region),
+            None,
+        )
+        if not row:
+            return None
+        spot = float(row.get("RRP", 0)) / 10
+        ip = round(spot + 10, 2)
+        fip = round(spot * 0.92, 2)
+        return self._aemo_result(ip, fip, source)
+
+    @staticmethod
+    def _aemo_result(ip: float, fip: float, source: str) -> dict:
+        return {
+            "import_price": ip,
+            "feedin_price": fip,
+            "descriptor": _descriptor(ip),
+            "spike": ip > 300,
+            "renewables": 45,
+            "source": source,
+            "forecast_prices": [],
+        }
+
     # -- System state --
+
+    @staticmethod
+    def _sanitize_system(data: dict) -> dict:
+        """Null out values that look like Modbus/register overflow."""
+        field_bounds = {
+            "solar_kw": SENSOR_BOUNDS.get("solar_power"),
+            "battery_kw": SENSOR_BOUNDS.get("battery_power"),
+            "grid_kw": SENSOR_BOUNDS.get("grid_power"),
+            "load_kw": SENSOR_BOUNDS.get("load_power"),
+            "soc": SENSOR_BOUNDS.get("battery_soc"),
+            "battery_soh": SENSOR_BOUNDS.get("battery_soh"),
+            "battery_temp": SENSOR_BOUNDS.get("battery_temp"),
+            "battery_voltage": SENSOR_BOUNDS.get("battery_voltage"),
+        }
+        for field, bounds in field_bounds.items():
+            val = data.get(field)
+            if val is not None and bounds:
+                try:
+                    if not (bounds[0] <= float(val) <= bounds[1]):
+                        _LOGGER.debug("Sanitized %s=%s (outside %s)", field, val, bounds)
+                        data[field] = None
+                except (ValueError, TypeError):
+                    data[field] = None
+        return data
 
     async def _fetch_system(self) -> dict:
         backend = self._cfg.get(CONF_BACKEND_URL, "").rstrip("/")
@@ -266,7 +338,7 @@ class VoltiqCoordinator(DataUpdateCoordinator):
                 if r.status_code == 200:
                     data = r.json()
                     data["backend_online"] = True
-                    return data
+                    return self._sanitize_system(data)
                 r2 = await self._client.get(f"{backend}/api/health", timeout=4)
                 if r2.status_code == 200:
                     return {"backend_online": True}
@@ -274,7 +346,8 @@ class VoltiqCoordinator(DataUpdateCoordinator):
                 pass
         rows = await self._sb_get("system_state", {"order": "updated_at.desc", "limit": "1"})
         if rows:
-            return {**rows[0], "backend_online": bool(backend)}
+            data = {**rows[0], "backend_online": bool(backend)}
+            return self._sanitize_system(data)
         return {"backend_online": False}
 
     # -- Earnings --
@@ -325,17 +398,26 @@ class VoltiqCoordinator(DataUpdateCoordinator):
             return {"tips": tips, "latest_tip": tips[0]}
 
         prices = (self.data or {}).get(DATA_PRICES, {})
+        source = prices.get("source", "unavailable")
         ip = float(prices.get("import_price", 0))
         fip = float(prices.get("feedin_price", 0))
-        soc = float(system.get("soc", 50))
-        if ip < 0 and soc < 90:
+        soc = system.get("soc")
+        soc_val = float(soc) if soc is not None else None
+
+        if source == "unavailable":
+            tip = "Price data unavailable -- check your retailer configuration."
+        elif ip < 0 and soc_val is not None and soc_val < 90:
             tip = f"Import price NEGATIVE ({ip:.1f}c) -- great time to charge battery!"
-        elif ip >= 300 and soc > 20:
+        elif ip >= 300 and soc_val is not None and soc_val > 20:
             tip = f"PRICE SPIKE ({ip:.1f}c) -- discharge battery now."
         elif fip < 0:
             tip = f"Feed-in is negative ({fip:.1f}c) -- stop exporting, use battery."
+        elif ip > 0 and ip < 10 and soc_val is not None and soc_val < 80:
+            tip = f"Import price is very low ({ip:.1f}c) -- good time to top up battery from the grid before prices rise."
+        elif soc_val is not None:
+            tip = f"System balanced -- {ip:.1f}c import, {fip:.1f}c feed-in, {soc_val:.0f}% SoC."
         else:
-            tip = f"System balanced -- {ip:.1f}c import, {fip:.1f}c feed-in, {soc:.0f}% SoC."
+            tip = f"Prices: {ip:.1f}c import, {fip:.1f}c feed-in. Connect a battery sensor for dispatch advice."
         return {"tips": [tip], "latest_tip": tip}
 
     # -- Settings --
