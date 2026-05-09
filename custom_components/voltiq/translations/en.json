@@ -42,8 +42,8 @@
         }
       },
       "sensors": {
-        "title": "Hardware Sensors (optional)",
-        "description": "Map your existing Home Assistant sensors to Voltiq. Leave blank to use Voltiq's built-in sensors from your backend.",
+        "title": "Power Sensors (optional)",
+        "description": "Map your existing Home Assistant power sensors to Voltiq. Leave blank to use Voltiq's built-in sensors from your backend.",
         "data": {
           "entity_solar_power": "Solar PV power sensor (W or kW)",
           "entity_battery_soc": "Battery state of charge sensor (%)",
@@ -51,6 +51,19 @@
           "entity_grid_power": "Grid power sensor (W or kW)",
           "entity_load_power": "Home load / consumption sensor (W or kW)",
           "entity_solar_forecast": "Solar forecast sensor (kWh)"
+        }
+      },
+      "energy": {
+        "title": "Energy & Price Sensors (optional)",
+        "description": "Map cumulative energy meters and price sensors. These enable the Energy view and long-term statistics. Leave blank if not available.",
+        "data": {
+          "entity_grid_import": "Grid import energy (kWh, cumulative)",
+          "entity_grid_export": "Grid export energy (kWh, cumulative)",
+          "entity_solar_energy": "Solar production energy (kWh, cumulative)",
+          "entity_battery_energy_in": "Battery charge energy (kWh)",
+          "entity_battery_energy_out": "Battery discharge energy (kWh)",
+          "entity_import_price": "Import price sensor (c/kWh or $/kWh)",
+          "entity_export_price": "Export / feed-in price sensor"
         }
       }
     },

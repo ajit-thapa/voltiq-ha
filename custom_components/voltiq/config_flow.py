@@ -174,7 +174,7 @@ class VoltiqConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_sensors(self, user_input: dict | None = None) -> FlowResult:
         if user_input is not None:
             self._data.update({k: v for k, v in user_input.items() if v})
-            return self.async_create_entry(title="Voltiq Energy Manager", data=self._data)
+            return await self.async_step_energy()
 
         schema = vol.Schema({
             vol.Optional(CONF_ENTITY_SOLAR_POWER, default=""): _POWER_SELECTOR,
@@ -185,6 +185,22 @@ class VoltiqConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Optional(CONF_ENTITY_SOLAR_FORECAST, default=""): _SENSOR_SELECTOR,
         })
         return self.async_show_form(step_id="sensors", data_schema=schema)
+
+    async def async_step_energy(self, user_input: dict | None = None) -> FlowResult:
+        if user_input is not None:
+            self._data.update({k: v for k, v in user_input.items() if v})
+            return self.async_create_entry(title="Voltiq Energy Manager", data=self._data)
+
+        schema = vol.Schema({
+            vol.Optional(CONF_ENTITY_GRID_IMPORT, default=""): _ENERGY_SELECTOR,
+            vol.Optional(CONF_ENTITY_GRID_EXPORT, default=""): _ENERGY_SELECTOR,
+            vol.Optional(CONF_ENTITY_SOLAR_ENERGY, default=""): _ENERGY_SELECTOR,
+            vol.Optional(CONF_ENTITY_BATTERY_ENERGY_IN, default=""): _ENERGY_SELECTOR,
+            vol.Optional(CONF_ENTITY_BATTERY_ENERGY_OUT, default=""): _ENERGY_SELECTOR,
+            vol.Optional(CONF_ENTITY_IMPORT_PRICE, default=""): _SENSOR_SELECTOR,
+            vol.Optional(CONF_ENTITY_EXPORT_PRICE, default=""): _SENSOR_SELECTOR,
+        })
+        return self.async_show_form(step_id="energy", data_schema=schema)
 
     @staticmethod
     @callback

@@ -254,6 +254,27 @@ EARNINGS_SENSORS: tuple[VoltiqSensorDescription, ...] = (
     ),
 )
 
+BATTERY_ENERGY_SENSORS: tuple[VoltiqSensorDescription, ...] = (
+    VoltiqSensorDescription(
+        key="battery_energy_in",
+        name="Battery Charged",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        icon="mdi:battery-arrow-up",
+        data_key=DATA_SYSTEM, value_path="battery_energy_in",
+    ),
+    VoltiqSensorDescription(
+        key="battery_energy_out",
+        name="Battery Discharged",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        icon="mdi:battery-arrow-down",
+        data_key=DATA_SYSTEM, value_path="battery_energy_out",
+    ),
+)
+
 ADVISOR_SENSORS: tuple[VoltiqSensorDescription, ...] = (
     VoltiqSensorDescription(
         key="advisor_tip",
@@ -311,7 +332,8 @@ async def async_setup_entry(
     entities = []
     for desc in (
         *PRICE_SENSORS, *SYSTEM_SENSORS, *FORECAST_SENSORS,
-        *EARNINGS_SENSORS, *ADVISOR_SENSORS, *ALERTS_SENSORS,
+        *EARNINGS_SENSORS, *BATTERY_ENERGY_SENSORS,
+        *ADVISOR_SENSORS, *ALERTS_SENSORS,
     ):
         mapped_entity_id = cfg.get(SENSOR_ENTITY_MAP.get(desc.key, ""), "")
         entities.append(VoltiqSensor(coordinator, desc, entry.entry_id, mapped_entity_id))

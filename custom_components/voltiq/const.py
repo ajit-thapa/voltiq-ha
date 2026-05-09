@@ -67,13 +67,22 @@ DASHBOARD_TITLE = "Voltiq Energy"
 # When a user maps an external entity, the sensor reads from HA state
 # instead of coordinator data.
 SENSOR_ENTITY_MAP: dict[str, str] = {
+    # Power sensors (options step: sensors)
     "solar_power": CONF_ENTITY_SOLAR_POWER,
     "battery_soc": CONF_ENTITY_BATTERY_SOC,
     "battery_power": CONF_ENTITY_BATTERY_POWER,
     "grid_power": CONF_ENTITY_GRID_POWER,
     "load_power": CONF_ENTITY_LOAD_POWER,
+    # Energy sensors (options step: energy)
+    "imported_kwh": CONF_ENTITY_GRID_IMPORT,
+    "exported_kwh": CONF_ENTITY_GRID_EXPORT,
+    "solar_kwh_today": CONF_ENTITY_SOLAR_ENERGY,
+    "battery_energy_in": CONF_ENTITY_BATTERY_ENERGY_IN,
+    "battery_energy_out": CONF_ENTITY_BATTERY_ENERGY_OUT,
+    # Price sensors (options step: energy)
     "import_price": CONF_ENTITY_IMPORT_PRICE,
     "feedin_price": CONF_ENTITY_EXPORT_PRICE,
+    # Forecast
     "solar_today_kwh": CONF_ENTITY_SOLAR_FORECAST,
 }
 
