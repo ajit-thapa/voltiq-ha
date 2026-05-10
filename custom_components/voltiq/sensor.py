@@ -31,6 +31,7 @@ from .const import (
     DATA_PRICES, DATA_SYSTEM, DATA_FORECAST,
     DATA_EARNINGS, DATA_ALERTS, DATA_ADVISOR,
     SENSOR_ENTITY_MAP, SENSOR_BOUNDS,
+    CONF_RETAILER, RETAILER_LOCALVOLTS,
 )
 from .coordinator import VoltiqCoordinator
 
@@ -330,13 +331,30 @@ async def async_setup_entry(
     coordinator: VoltiqCoordinator = hass.data[DOMAIN][entry.entry_id]
     cfg = dict(entry.data) | dict(entry.options)
     entities = []
+
+    use_lv_prefix = cfg.get(CONF_RETAILER) == RETAILER_LOCALVOLTS
+
     for desc in (
         *PRICE_SENSORS, *SYSTEM_SENSORS, *FORECAST_SENSORS,
         *EARNINGS_SENSORS, *BATTERY_ENERGY_SENSORS,
         *ADVISOR_SENSORS, *ALERTS_SENSORS,
     ):
+        desc_key = desc.key
+        if use_lv_prefix and desc in PRICE_SENSORS:
+            desc_key = f"lv_{desc.key}"
+
         mapped_entity_id = cfg.get(SENSOR_ENTITY_MAP.get(desc.key, ""), "")
-        entities.append(VoltiqSensor(coordinator, desc, entry.entry_id, mapped_entity_id))
+        entity_desc = VoltiqSensorDescription(
+            key=desc_key,
+            name=desc.name,
+            native_unit_of_measurement=desc.native_unit_of_measurement,
+            device_class=desc.device_class,
+            state_class=desc.state_class,
+            icon=desc.icon,
+            data_key=desc.data_key,
+            value_path=desc.value_path,
+        )
+        entities.append(VoltiqSensor(coordinator, entity_desc, entry.entry_id, mapped_entity_id))
     async_add_entities(entities)
 
 

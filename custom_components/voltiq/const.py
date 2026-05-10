@@ -82,6 +82,12 @@ SENSOR_ENTITY_MAP: dict[str, str] = {
     # Price sensors (options step: energy)
     "import_price": CONF_ENTITY_IMPORT_PRICE,
     "feedin_price": CONF_ENTITY_EXPORT_PRICE,
+    # LocalVolts price sensors (lv_ prefixed)
+    "lv_import_price": CONF_ENTITY_IMPORT_PRICE,
+    "lv_feedin_price": CONF_ENTITY_EXPORT_PRICE,
+    "lv_price_descriptor": None,
+    "lv_renewables": None,
+    "lv_price_source": None,
     # Forecast
     "solar_today_kwh": CONF_ENTITY_SOLAR_FORECAST,
 }
